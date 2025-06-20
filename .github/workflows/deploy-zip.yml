@@ -1,26 +1,28 @@
-name: Build & Deploy Function with boto3
+name: Build & Deploy with boto3
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python 3.9
+      - name: Setup Python 3.9
         uses: actions/setup-python@v4
         with: python-version: "3.9"
 
-      - name: Install dependencies into package/
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install boto3 requests -t ./package
 
       - name: Package function
         run: |
+          mkdir package
           cp lambda_function.py package/
           cd package
           zip -r ../function.zip .
@@ -40,8 +42,8 @@ jobs:
           $HOME/.local/bin/yc config set folder-id   $YC_FOLDER_ID
 
       - name: Deploy Function ZIP
-        env: 
-          FUNCTION_NAME: process-random-image
+        env:
+          FUNCTION_NAME: '"$FunctionName"'
         run: |
           $HOME/.local/bin/yc serverless function version create `
             --function-name $FUNCTION_NAME `
