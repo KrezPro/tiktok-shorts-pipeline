@@ -1,0 +1,54 @@
+name: Build & Deploy Function with boto3
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with: python-version: "3.9"
+
+      - name: Install dependencies into package/
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 requests -t ./package
+
+      - name: Package function
+        run: |
+          cp lambda_function.py package/
+          cd package
+          zip -r ../function.zip .
+
+      - name: Install yc CLI
+        run: |
+          curl -s https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Authenticate to YC
+        env:
+          YC_OAUTH_TOKEN: ${{ secrets.YC_OAUTH_TOKEN }}
+          YC_FOLDER_ID:   ${{ secrets.YC_FOLDER_ID }}
+          SA_ID:          ${{ secrets.YC_SERVICE_ACCOUNT_ID }}
+        run: |
+          $HOME/.local/bin/yc config set oauth-token $YC_OAUTH_TOKEN
+          $HOME/.local/bin/yc config set folder-id   $YC_FOLDER_ID
+
+      - name: Deploy Function ZIP
+        env: 
+          FUNCTION_NAME: process-random-image
+        run: |
+          $HOME/.local/bin/yc serverless function version create `
+            --function-name $FUNCTION_NAME `
+            --runtime python39 `
+            --entrypoint lambda_function.lambda_handler `
+            --memory 256m `
+            --execution-timeout 60s `
+            --service-account-id $SA_ID `
+            --folder-id $YC_FOLDER_ID `
+            --source-path function.zip
